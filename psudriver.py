@@ -19,9 +19,11 @@ class PSUDevice:
         if model == PSUModel.E3649A:
             self.brand = 'Keysight'
             self.nchannels = 2
+            self.rangelist = ['P35V', 'P60V']
         elif model == PSUModel.E3631A:
             self.brand = 'Agilent'
             self.nchannels = 3
+            self.rangelist = ['P6V', 'P25V', 'N25V']
 
         self.settings = {
             "brand" : self.brand,
@@ -52,6 +54,14 @@ class PSUDevice:
 
     def getCurrentLimit(self, channel):
         return self.ilimit
+
+    def setVoltageRange(self, channel, value):
+        self.channel = channel
+        self.vrange = value
+
+    def getVoltageRange(self, channel):
+        self.channel = channel
+        return self.vrange
 
     @property
     def output(self):
@@ -96,4 +106,11 @@ class PSUDevice:
     def ilimit(self, value):
         self.session.write(f'CURR {value}')
 
+    @property
+    def vrange(self):
+        return self.session.query('VOLT:RANGE?')
 
+    @vrange.setter
+    def vrange(self, value):
+        if value in self.rangelist:
+            self.session.write(f'VOLT:RANGE {value}')

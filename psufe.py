@@ -22,7 +22,7 @@ class PSU(midas.frontend.EquipmentBase):
         default_common.equip_type = midas.EQ_PERIODIC
         default_common.buffer_name = "SYSTEM"
         default_common.trigger_mask = 0
-        default_common.event_id = 3
+        default_common.event_id = 75
         default_common.period_ms = 2000
         default_common.read_when = midas.RO_ALWAYS
         default_common.log_history = 2      # history is enabled, data generated with period_ms frequency
@@ -34,12 +34,15 @@ class PSU(midas.frontend.EquipmentBase):
         self.psu.setCurrentLimit(1, 0.25)
         self.psu.setVoltage(2, 5.0)
         self.psu.setCurrentLimit(2, 0.50)
+        self.psu.setVoltageRange(2, 'P60V')
         self.psu.output = 1
 
     def readout_func(self):
+        print(f'{self.psu.brand} {self.psu.modelname}')
+        print(f'OUT: {self.psu.output}')
         for ch in range(1, self.psu.nchannels+1):
-            print(f'OUT{ch}: {self.psu.output}')
             print(f'V{ch}: {self.psu.getVoltage(ch)}')
+            print(f'VRANGE{ch}: {self.psu.getVoltageRange(ch)}')
             print(f'I{ch}: {self.psu.getCurrent(ch)}')
             print(f'ILIM{ch}: {self.psu.getCurrentLimit(ch)}')
 
