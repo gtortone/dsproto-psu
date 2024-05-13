@@ -3,48 +3,87 @@
 import sys
 import midas
 import midas.frontend
+import midas.event
 import pyvisa
 from pyvisa.constants import StopBits, Parity
 from pyvisa import constants
 
-from psudriver import PSUModel, PSUDevice
+from psudriver import PSUModel, PSUDevice, PSUFactory
 
 class PSU(midas.frontend.EquipmentBase):
 
     def __init__(self, client, session, model):
 
         self.session = session
-        self.psu = PSUDevice(PSUModel[model], session)
+        self.psu = PSUFactory(PSUModel[model], session)
 
-        equip_name = f'PSU{str(midas.frontend.frontend_index).zfill(2)}-{model}'
+        equip_name = f'PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}'
 
         default_common = midas.frontend.InitialEquipmentCommon()
         default_common.equip_type = midas.EQ_PERIODIC
         default_common.buffer_name = "SYSTEM"
         default_common.trigger_mask = 0
         default_common.event_id = 75
-        default_common.period_ms = 2000
+        default_common.period_ms = 10000   # event data frequency update (in milliseconds) 
         default_common.read_when = midas.RO_ALWAYS
-        default_common.log_history = 2      # history is enabled, data generated with period_ms frequency
+        default_common.log_history = 2  # history frequency update (in seconds) 
 
-        midas.frontend.EquipmentBase.__init__(self, client, equip_name, default_common);
+        midas.frontend.EquipmentBase.__init__(self, client, equip_name, default_common, self.psu.getSettingsSchema());
+        
+        self.updateODB()
 
-        # FIXME
-        self.psu.setVoltage(1, 2.5)
-        self.psu.setCurrentLimit(1, 0.25)
-        self.psu.setVoltage(2, 5.0)
-        self.psu.setCurrentLimit(2, 0.50)
-        self.psu.setVoltageRange(2, 'P60V')
-        self.psu.output = 1
-
-    def readout_func(self):
+    def debug(self):
         print(f'{self.psu.brand} {self.psu.modelname}')
         print(f'OUT: {self.psu.output}')
+        print("*")
         for ch in range(1, self.psu.nchannels+1):
             print(f'V{ch}: {self.psu.getVoltage(ch)}')
             print(f'VRANGE{ch}: {self.psu.getVoltageRange(ch)}')
             print(f'I{ch}: {self.psu.getCurrent(ch)}')
             print(f'ILIM{ch}: {self.psu.getCurrentLimit(ch)}')
+            print("-----------------------")
+
+    def readout_func(self):
+        self.updateODB()
+        event = midas.event.Event()
+        V = []
+        I = []
+        VLIM = []
+        ILIM = []
+        for ch in range(1, self.psu.nchannels+1):
+            V.append(self.psu.getVoltage(ch))
+            I.append(self.psu.getCurrent(ch))
+            VLIM.append(self.psu.getVoltageLimit(ch))
+            ILIM.append(self.psu.getCurrentLimit(ch))
+
+        event.create_bank('VOLT', midas.TID_FLOAT, V)
+        event.create_bank('CURR', midas.TID_FLOAT, I)
+        event.create_bank('VLIM', midas.TID_FLOAT, VLIM)
+        event.create_bank('ILIM', midas.TID_FLOAT, ILIM)
+        event.create_bank('OUTP', midas.TID_INT32, [int(self.psu.output)])
+
+        return event
+
+    def updateODB(self):
+        settings = self.psu.getSettingsSchema()
+        for ch in range(1, self.psu.nchannels+1):
+            settings['vset'][ch-1] = self.psu.getVoltageLimit(ch)
+            settings['ilimit'][ch-1] = self.psu.getCurrentLimit(ch)
+            settings['vrange'][ch-1] = self.psu.getVoltageRange(ch)
+        settings['output'] = self.psu.output
+
+        self.client.odb_set(f'{self.odb_settings_dir}', settings, remove_unspecified_keys=False)
+
+    def detailed_settings_changed_func(self, path, idx, new_value):
+        if path == f'{self.odb_settings_dir}/vset':
+            self.psu.setVoltageLimit(idx+1, new_value)
+        elif path == f'{self.odb_settings_dir}/ilimit':
+            self.psu.setCurrentLimit(idx+1, new_value)
+        elif path == f'{self.odb_settings_dir}/output':
+            self.psu.output = new_value
+        elif path == f'{self.odb_settings_dir}/vrange':
+            if new_value in self.psu.rangelist:
+                self.psu.setVoltageRange(idx+1, new_value)
 
 class PSUFrontend(midas.frontend.FrontendBase):
 
@@ -81,21 +120,19 @@ if __name__ == "__main__":
         print(f"E: PSU {args.model} not found on {args.port}")
         sys.exit(-1)
 
-    equip_name = f'PSU{str(midas.frontend.frontend_index).zfill(2)}-{model}'
+    equip_name = f'PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}'
 
     # check if a PSU frontend is running with same model and id
-    client = midas.client.MidasClient("psu")
+    with midas.client.MidasClient("psu") as c:
 
-    if client.odb_exists(f"/Equipment/{equip_name}/Common/Frontend name"):
-        fename = client.odb_get(f"/Equipment/{equip_name}/Common/Frontend name")
+        if c.odb_exists(f"/Equipment/{equip_name}/Common/Frontend name"):
+            fename = c.odb_get(f"/Equipment/{equip_name}/Common/Frontend name")
 
-        if client.odb_get(f"/Equipment/{equip_name}"):
-            for cid in client.odb_get(f'/System/Clients'):
-                if client.odb_get(f'/System/Clients/{cid}/Name') == fename:
-                    client.msg(f"{equip_name} already running on MIDAS server, please change frontend index")
-                    sys.exit(-1)
-
-    client.disconnect()
+            if c.odb_get(f"/Equipment/{equip_name}"):
+                for cid in c.odb_get(f'/System/Clients'):
+                    if c.odb_get(f'/System/Clients/{cid}/Name') == fename:
+                        c.msg(f"{equip_name} already running on MIDAS server, please change frontend index")
+                        sys.exit(-1)
 
     fe = PSUFrontend(session, model)
     fe.run()
