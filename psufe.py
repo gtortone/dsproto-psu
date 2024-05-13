@@ -66,10 +66,10 @@ class PSU(midas.frontend.EquipmentBase):
 
     def updateODB(self):
         settings = self.psu.getSettingsSchema()
-        for ch in range(1, self.psu.nchannels+1):
-            settings['vset'][ch-1] = self.psu.getVoltageLimit(ch)
-            settings['ilimit'][ch-1] = self.psu.getCurrentLimit(ch)
-            settings['vrange'][ch-1] = self.psu.getVoltageRange(ch)
+        for ch in range(0, self.psu.nchannels):
+            settings['vset'][ch] = self.psu.getVoltageLimit(ch+1)
+            settings['ilimit'][ch] = self.psu.getCurrentLimit(ch+1)
+            settings['vrange'][ch] = self.psu.getVoltageRangeIndex(ch+1)
         settings['output'] = self.psu.output
 
         self.client.odb_set(f'{self.odb_settings_dir}', settings, remove_unspecified_keys=False)
@@ -82,8 +82,9 @@ class PSU(midas.frontend.EquipmentBase):
         elif path == f'{self.odb_settings_dir}/output':
             self.psu.output = new_value
         elif path == f'{self.odb_settings_dir}/vrange':
-            if new_value in self.psu.rangelist:
-                self.psu.setVoltageRange(idx+1, new_value)
+            if idx == -1:
+                return
+            self.psu.setVoltageRangeIndex(idx+1, new_value)
 
 class PSUFrontend(midas.frontend.FrontendBase):
 
@@ -105,7 +106,7 @@ if __name__ == "__main__":
     dev = f'ASRL{args.port}::INSTR'
     session = rm.open_resource(dev, baud_rate = 9600, data_bits = 7, parity = Parity.even, 
                 flow_control = constants.VI_ASRL_FLOW_NONE, stop_bits = StopBits.two)
-    session.read_termination = '\n'
+    session.read_termination = '\r\n'
     session.write_termination = '\n'
 
     try:
@@ -136,4 +137,4 @@ if __name__ == "__main__":
 
     fe = PSUFrontend(session, model)
     fe.run()
-
+    

@@ -7,6 +7,7 @@ class PSUDevice:
     def __init__(self, session):
         self.session = session
         self.postwritedelay = 0
+        self.rangelist = [ 'LOW', 'HIGH' ]
 
     def query(self, cmd):
         res = ""
@@ -58,9 +59,17 @@ class PSUDevice:
         self.channel = channel
         self.vrange = value
 
+    def setVoltageRangeIndex(self, channel, index):
+        if index in range(0, len(self.rangelist)):
+            self.channel = channel
+            self.vrange = self.rangelist[index]
+
     def getVoltageRange(self, channel):
         self.channel = channel
         return self.vrange
+
+    def getVoltageRangeIndex(self, channel):
+        return self.rangelist.index(self.getVoltageRange(channel))
 
     @property
     def output(self):
@@ -74,7 +83,7 @@ class PSUDevice:
     @property
     def channel(self):
         s = self.query(self.cmd["get"]["channel"])
-        return int(s[-1])
+        return(int(s))
 
     @channel.setter
     def channel(self, value):
@@ -158,7 +167,7 @@ class PSUKeysightE3649A(PSUDevice):
     def getSettingsSchema(self):
         self.settings["vset"] = [0.0] * self.nchannels
         self.settings["ilimit"] = [0.0] * self.nchannels
-        self.settings["vrange"] = [self.rangelist[0]] * self.nchannels
+        self.settings["vrange"] = [0] * self.nchannels
         return self.settings
 
 class PSUAgilentE3631A(PSUDevice):
