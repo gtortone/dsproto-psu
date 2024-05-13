@@ -24,9 +24,9 @@ class PSU(midas.frontend.EquipmentBase):
         default_common.buffer_name = "SYSTEM"
         default_common.trigger_mask = 0
         default_common.event_id = 75
-        default_common.period_ms = 10000   # event data frequency update (in milliseconds) 
+        default_common.period_ms = 5000   # event data frequency update (in milliseconds) 
         default_common.read_when = midas.RO_ALWAYS
-        default_common.log_history = 2  # history frequency update (in seconds) 
+        default_common.log_history = 1  
 
         midas.frontend.EquipmentBase.__init__(self, client, equip_name, default_common, self.psu.getSettingsSchema());
         
@@ -51,10 +51,13 @@ class PSU(midas.frontend.EquipmentBase):
         VLIM = []
         ILIM = []
         for ch in range(1, self.psu.nchannels+1):
-            V.append(self.psu.getVoltage(ch))
-            I.append(self.psu.getCurrent(ch))
-            VLIM.append(self.psu.getVoltageLimit(ch))
-            ILIM.append(self.psu.getCurrentLimit(ch))
+            try:
+                V.append(self.psu.getVoltage(ch))
+                I.append(self.psu.getCurrent(ch))
+                VLIM.append(self.psu.getVoltageLimit(ch))
+                ILIM.append(self.psu.getCurrentLimit(ch))
+            except Exception as e:
+                print(e)
 
         event.create_bank('VOLT', midas.TID_FLOAT, V)
         event.create_bank('CURR', midas.TID_FLOAT, I)
@@ -67,12 +70,18 @@ class PSU(midas.frontend.EquipmentBase):
     def updateODB(self):
         settings = self.psu.getSettingsSchema()
         for ch in range(0, self.psu.nchannels):
-            settings['vset'][ch] = self.psu.getVoltageLimit(ch+1)
-            settings['ilimit'][ch] = self.psu.getCurrentLimit(ch+1)
-            settings['vrange'][ch] = self.psu.getVoltageRangeIndex(ch+1)
+            try:
+                settings['vset'][ch] = self.psu.getVoltageLimit(ch+1)
+                settings['ilimit'][ch] = self.psu.getCurrentLimit(ch+1)
+                settings['vrange'][ch] = self.psu.getVoltageRangeIndex(ch+1)
+            except Exception as e:
+                print(e)
         settings['output'] = self.psu.output
 
-        self.client.odb_set(f'{self.odb_settings_dir}', settings, remove_unspecified_keys=False)
+        if(settings != self.settings):
+            for k,v in settings.items():
+                if settings[k] != self.settings[k]:
+                    self.client.odb_set(f'{self.odb_settings_dir}/{k}', v, remove_unspecified_keys=False)
 
     def detailed_settings_changed_func(self, path, idx, new_value):
         if path == f'{self.odb_settings_dir}/vset':
@@ -92,7 +101,7 @@ class PSUFrontend(midas.frontend.FrontendBase):
         if(midas.frontend.frontend_index == -1):
             client.msg("set frontend index with -i option", is_error=True)
             sys.exit(-1)
-        midas.frontend.FrontendBase.__init__(self, f"PSU{str(midas.frontend.frontend_index).zfill(2)}")
+        midas.frontend.FrontendBase.__init__(self, f"PSU-{model}")
         self.add_equipment(PSU(self.client, session, model))
 
 if __name__ == "__main__":
