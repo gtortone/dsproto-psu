@@ -4,9 +4,7 @@ import sys
 import midas
 import midas.frontend
 import midas.event
-import pyvisa
-from pyvisa.constants import StopBits, Parity
-from pyvisa import constants
+from pyvisa import ResourceManager, constants
 
 from psudriver import PSUModel, PSUDevice, PSUFactory
 
@@ -111,10 +109,10 @@ if __name__ == "__main__":
     args = midas.frontend.parse_args()
 
     # lookup for PSU on USB port
-    rm = pyvisa.ResourceManager()
+    rm = ResourceManager()
     dev = f'ASRL{args.port}::INSTR'
-    session = rm.open_resource(dev, baud_rate = 9600, data_bits = 7, parity = Parity.even, 
-                flow_control = constants.VI_ASRL_FLOW_NONE, stop_bits = StopBits.two)
+    session = rm.open_resource(dev, baud_rate = 9600, data_bits = 7, parity = constants.Parity.even, 
+                flow_control = constants.VI_ASRL_FLOW_NONE, stop_bits = constants.StopBits.two)
     session.read_termination = '\r\n'
     session.write_termination = '\n'
 
