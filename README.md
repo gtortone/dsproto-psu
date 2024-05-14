@@ -1,2 +1,3 @@
-# dsproto-PSU-E36xxA
+# dsproto-psu
+
 Agilent/Keysight PSU MIDAS frontend
