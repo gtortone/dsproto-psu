@@ -97,7 +97,7 @@ class PSUFrontend(midas.frontend.FrontendBase):
 
     def __init__(self, session, model):
         if(midas.frontend.frontend_index == -1):
-            client.msg("set frontend index with -i option", is_error=True)
+            print("set frontend index with -i option")
             sys.exit(-1)
         midas.frontend.FrontendBase.__init__(self, f"PSU-{model}")
         self.add_equipment(PSU(self.client, session, model))
@@ -105,7 +105,7 @@ class PSUFrontend(midas.frontend.FrontendBase):
 if __name__ == "__main__":
     parser = midas.frontend.parser
     parser.add_argument("--port", default="/dev/ttyUSB0")
-    parser.add_argument("--model", required=True, choices = [m.name for m in PSUModel])
+    parser.add_argument("--model", required=True, choices = [m.value[0] for m in PSUModel])
     args = midas.frontend.parse_args()
 
     # lookup for PSU on USB port

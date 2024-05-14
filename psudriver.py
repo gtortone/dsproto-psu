@@ -1,7 +1,5 @@
 import time
 from enum import Enum
-from pyvisa.constants import StopBits, Parity
-from pyvisa import constants
 
 class PSUDevice:
     def __init__(self, session):
