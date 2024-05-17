@@ -7,6 +7,7 @@ import midas.event
 from pyvisa import ResourceManager, constants
 
 from psudriver import PSUModel, PSUDevice, PSUFactory
+from utils import flatten_dict
 
 class PSU(midas.frontend.EquipmentBase):
 
@@ -31,19 +32,13 @@ class PSU(midas.frontend.EquipmentBase):
         self.updateODB()
 
     def debug(self):
-        print(f'{self.psu.brand} {self.psu.modelname}')
-        print(f'OUT: {self.psu.output}')
-        print("*")
-        for ch in range(1, self.psu.nchannels+1):
-            print(f'V{ch}: {self.psu.getVoltage(ch)}')
-            print(f'VRANGE{ch}: {self.psu.getVoltageRange(ch)}')
-            print(f'I{ch}: {self.psu.getCurrent(ch)}')
-            print(f'ILIM{ch}: {self.psu.getCurrentLimit(ch)}')
-            print("-----------------------")
+        self.psu.debug()
 
     def readout_func(self):
-        self.updateODB()
+        #self.debug()
+        #self.updateODB()
         event = midas.event.Event()
+        
         V = []
         I = []
         VLIM = []
@@ -71,14 +66,17 @@ class PSU(midas.frontend.EquipmentBase):
             try:
                 settings['vset'][ch] = self.psu.getVoltageLimit(ch+1)
                 settings['ilimit'][ch] = self.psu.getCurrentLimit(ch+1)
-                settings['vrange'][ch] = self.psu.getVoltageRangeIndex(ch+1)
+                if('vrange' in settings):
+                    settings['vrange'][ch] = self.psu.getVoltageRangeIndex(ch+1)
             except Exception as e:
                 print(e)
         settings['output'] = self.psu.output
 
         if(settings != self.settings):
-            for k,v in settings.items():
-                if settings[k] != self.settings[k]:
+            local_settings = flatten_dict(settings)
+            odb_settings = flatten_dict(self.settings)
+            for k,v in local_settings.items():
+                if local_settings[k] != odb_settings[k]:
                     self.client.odb_set(f'{self.odb_settings_dir}/{k}', v, remove_unspecified_keys=False)
 
     def detailed_settings_changed_func(self, path, idx, new_value):
@@ -92,6 +90,10 @@ class PSU(midas.frontend.EquipmentBase):
             if idx == -1:
                 return
             self.psu.setVoltageRangeIndex(idx+1, new_value)
+
+        error = self.psu.getLastError()
+        if error[0] != 0:
+            self.client.msg(error[1], is_error=True)
 
 class PSUFrontend(midas.frontend.FrontendBase):
 
