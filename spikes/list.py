@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import time
 import warnings
 warnings.simplefilter('ignore')
 
@@ -8,6 +9,9 @@ from pyvisa import ResourceManager, constants
 class PSU:
     def __init__(self, session):
         self.session = session
+        self.session.write("*RST")
+        self.session.write("*CLS")
+        time.sleep(1)
 
     def idn(self):
         return self.session.query('*IDN?')
