@@ -2,11 +2,11 @@ import time
 from enum import Enum
 
 class PSUDevice:
-    def __init__(self, session):
-        self.session = session
+    def __init__(self):
         self.currch = 0
         self.postwritedelay = 0
         self.rangelist = [ 'LOW', 'HIGH' ]
+        self.session = None
 
     def query(self, cmd):
         res = ""
@@ -33,6 +33,9 @@ class PSUDevice:
     def reset(self):
         self.write("*RST")
         self.write("*CLS")
+
+    def setSession(self, session):
+        self.session = session
 
     def getVoltage(self, channel):
         self.channel = channel
@@ -137,8 +140,8 @@ class PSUModel(Enum):
     E3631A = 'E3631A',            
 
 class PSUKeysightE3649A(PSUDevice):
-    def __init__(self, session):
-        super().__init__(session)
+    def __init__(self):
+        super().__init__()
         self.model = PSUModel.E3649A
         self.modelname = self.model.name
         self.brand = "Keysight"
@@ -147,6 +150,7 @@ class PSUKeysightE3649A(PSUDevice):
         self.postwritedelay = 0.1
 
         self.settings = {
+            "port" : "",
             "brand" : self.brand,
             "model": self.modelname,
             "output": False,
@@ -171,8 +175,6 @@ class PSUKeysightE3649A(PSUDevice):
             }
         }
 
-        self.reset()
-
     def debug(self):
         print(f'{self.brand} {self.modelname}')
         print(f'OUT: {self.output}')
@@ -191,8 +193,8 @@ class PSUKeysightE3649A(PSUDevice):
         return self.settings
 
 class PSUAgilentE3631A(PSUDevice):
-    def __init__(self, session):
-        super().__init__(session)
+    def __init__(self):
+        super().__init__()
         self.model = PSUModel.E3631A
         self.modelname = self.model.name
         self.brand = "Agilent"
@@ -200,6 +202,7 @@ class PSUAgilentE3631A(PSUDevice):
         self.postwritedelay = 0.1
 
         self.settings = {
+            "port" : "",
             "brand" : self.brand,
             "model": self.modelname,
             "output": False,
@@ -222,9 +225,6 @@ class PSUAgilentE3631A(PSUDevice):
                 "ilimit" : "CURR",
             }
         }
-
-        self.reset()
-        self.init()
 
     def init(self):
         self.write(f'{self.cmd["init"]}') 
@@ -262,11 +262,11 @@ class PSUAgilentE3631A(PSUDevice):
             # channel switching requires a delay of 500 ms
             time.sleep(0.5)                 
 
-def PSUFactory(model, session):
+def PSUFactory(model):
     if not isinstance(model, PSUModel):
         raise TypeError
     if model == PSUModel.E3649A:
-        return PSUKeysightE3649A(session)
+        return PSUKeysightE3649A()
     elif model == PSUModel.E3631A:
-        return PSUAgilentE3631A(session)
+        return PSUAgilentE3631A()
         

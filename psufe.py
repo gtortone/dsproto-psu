@@ -11,13 +11,8 @@ from utils import flatten_dict
 
 class PSU(midas.frontend.EquipmentBase):
 
-    def __init__(self, client, session, model):
-
-        self.session = session
-        self.psu = PSUFactory(PSUModel[model], session)
-
-        equip_name = f'PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}'
-
+    def __init__(self, client, model):
+        
         default_common = midas.frontend.InitialEquipmentCommon()
         default_common.equip_type = midas.EQ_PERIODIC
         default_common.buffer_name = "SYSTEM"
@@ -27,8 +22,52 @@ class PSU(midas.frontend.EquipmentBase):
         default_common.read_when = midas.RO_ALWAYS
         default_common.log_history = 1  
 
+        equip_name = f'PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}'
+        self.psu = PSUFactory(PSUModel[model])
+
         midas.frontend.EquipmentBase.__init__(self, client, equip_name, default_common, self.psu.getSettingsSchema());
-        
+
+        port = self.settings['port']
+
+        if port == "":
+            self.client.msg(f"please set port device to /Equipment/{equip_name}/Settings/port", is_error=True)
+            self.client.communicate(1000)
+            sys.exit(-1)
+
+        # lookup for PSU on USB port
+        rm = ResourceManager()
+        dev = f'ASRL{port}::INSTR'
+
+        self.session = None
+        try:
+            self.session = rm.open_resource(dev, baud_rate = 9600, data_bits = 7, parity = constants.Parity.even, 
+                        flow_control = constants.VI_ASRL_FLOW_NONE, stop_bits = constants.StopBits.two)
+        except Exception as e:
+            self.client.communicate(1000)
+            self.client.msg(f"{e}", is_error=True)
+            sys.exit(-1)
+
+        self.session.read_termination = '\r\n'
+        self.session.write_termination = '\n'
+
+        try:
+            model = self.session.query('*CLS; *IDN?').split(',')[1]
+        except Exception as e:
+            self.client.msg(f"No device found on {port}", is_error=True)
+            self.client.communicate(1000)
+            sys.exit(-1)
+
+        if model == args.model: 
+            self.client.msg(f"PSU {model} found on {port}")
+        else:
+            self.client.msg(f"PSU {model} not found on {port}", is_error=True)
+            self.client.communicate(1000)
+            sys.exit(-1)
+
+        self.psu.setSession(self.session)
+        self.psu.reset()
+        self.psu.init()
+
         self.updateODB()
 
     def debug(self):
@@ -71,6 +110,7 @@ class PSU(midas.frontend.EquipmentBase):
             except Exception as e:
                 print(e)
         settings['output'] = self.psu.output
+        settings['port'] = self.settings['port']
 
         if(settings != self.settings):
             local_settings = flatten_dict(settings)
@@ -97,40 +137,20 @@ class PSU(midas.frontend.EquipmentBase):
 
 class PSUFrontend(midas.frontend.FrontendBase):
 
-    def __init__(self, session, model):
+    def __init__(self, model):
         if(midas.frontend.frontend_index == -1):
             print("set frontend index with -i option")
             sys.exit(-1)
-        midas.frontend.FrontendBase.__init__(self, f"PSU-{model}")
-        self.add_equipment(PSU(self.client, session, model))
+
+        midas.frontend.FrontendBase.__init__(self, f"PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}")
+        self.add_equipment(PSU(self.client, model))
 
 if __name__ == "__main__":
     parser = midas.frontend.parser
-    parser.add_argument("--port", default="/dev/ttyUSB0")
     parser.add_argument("--model", required=True, choices = [m.value[0] for m in PSUModel])
     args = midas.frontend.parse_args()
 
-    # lookup for PSU on USB port
-    rm = ResourceManager()
-    dev = f'ASRL{args.port}::INSTR'
-    session = rm.open_resource(dev, baud_rate = 9600, data_bits = 7, parity = constants.Parity.even, 
-                flow_control = constants.VI_ASRL_FLOW_NONE, stop_bits = constants.StopBits.two)
-    session.read_termination = '\r\n'
-    session.write_termination = '\n'
-
-    try:
-        model = session.query('*IDN?').split(',')[1]
-    except Exception as e:
-        print(f"E: {e}")
-        sys.exit(-1)
-
-    if model == args.model: 
-        print(f"I: PSU {model} found on {args.port}")
-    else:
-        print(f"E: PSU {args.model} not found on {args.port}")
-        sys.exit(-1)
-
-    equip_name = f'PSU-{model}-{str(midas.frontend.frontend_index).zfill(2)}'
+    equip_name = f'PSU-{args.model}-{str(midas.frontend.frontend_index).zfill(2)}'
 
     # check if a PSU frontend is running with same model and id
     with midas.client.MidasClient("psu") as c:
@@ -141,9 +161,12 @@ if __name__ == "__main__":
             if c.odb_get(f"/Equipment/{equip_name}"):
                 for cid in c.odb_get(f'/System/Clients'):
                     if c.odb_get(f'/System/Clients/{cid}/Name') == fename:
-                        c.msg(f"{equip_name} already running on MIDAS server, please change frontend index")
+                        c.msg(f"{equip_name} already running on MIDAS server, please change frontend index", is_error=True)
+                        c.communicate(1000)
                         sys.exit(-1)
 
-    fe = PSUFrontend(session, model)
+        c.odb_delete("/Programs/psu")
+
+    fe = PSUFrontend(args.model)
     fe.run()
     
