@@ -117,6 +117,8 @@ class PSU(midas.frontend.EquipmentBase):
             local_settings = flatten_dict(settings)
             odb_settings = flatten_dict(self.settings)
             for k,v in local_settings.items():
+                if k == 'name':
+                    continue
                 if local_settings[k] != odb_settings[k]:
                     self.client.odb_set(f'{self.odb_settings_dir}/{k}', v, remove_unspecified_keys=False)
 
