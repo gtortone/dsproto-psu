@@ -190,6 +190,7 @@ class PSUKeysightE3649A(PSUDevice):
         self.settings["vset"] = [0.0] * self.nchannels
         self.settings["ilimit"] = [0.0] * self.nchannels
         self.settings["vrange"] = [0] * self.nchannels
+        self.settings["name"] = [f'channel{ch}' for ch in range(0, self.nchannels)]
         return self.settings
 
 class PSUAgilentE3631A(PSUDevice):
@@ -251,6 +252,7 @@ class PSUAgilentE3631A(PSUDevice):
     def getSettingsSchema(self):
         self.settings["vset"] = [0.0] * self.nchannels
         self.settings["ilimit"] = [0.0] * self.nchannels
+        self.settings["name"] = [f'channel{ch}' for ch in range(0, self.nchannels)]
         return self.settings
 
     @PSUDevice.channel.setter
