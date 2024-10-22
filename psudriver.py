@@ -31,7 +31,7 @@ class PSUDevice:
         None
 
     def reset(self):
-        self.write("*RST")
+        #self.write("*RST")
         self.write("*CLS")
 
     def setSession(self, session):
